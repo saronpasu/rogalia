@@ -18,6 +18,9 @@ function Controller(game) {
     this.RMB = 2;
     this.callback = [null, null, null];
 
+    this.gamepad = navigator.getGamepads[0];
+    this.gamepadButtleMode = false; // toggle normal/battle gamepad keymap
+
     this.mouse = {
         // relative to window
         x: 0,
@@ -490,6 +493,145 @@ function Controller(game) {
         },
     };
 
+    this.gamepadKeymap = {
+        // Support "Standard" keymap.
+        0: { //A button
+            callback: function() {
+                if (this.gamepadButtleMode) {
+                    this.fight.hotkey(2);
+                } else {
+                    if (Panel.top && Panel.top.name != "chat") {
+                        Panel.top.hide();
+                    }
+                    game.player.setTarget(null);
+                }
+            },
+            help: "Close top window or unselect current target",
+        },
+        1: { //B button
+            button: "action",
+            callback: function(e) {
+                if (this.gamepadButtleMode) {
+                    this.fight.hotkey(1);
+                } else {
+                    game.player.defaultAction();
+                }
+            },
+            help: "Use item in hands"
+        },
+        2: { //X button
+            button: "pick-up",
+            callback: function() {
+                if (this.gamepadButtleMode) {
+                    this.fight.hotkey(3);
+                } else {
+                    game.player.pickUp();
+                }
+            },
+            help: "Pick up nearest item",
+        },
+        3: { //Y button
+            callback: function() {
+                if (this.gamepadButtleMode) {
+                    this.fight.hotkey(4);
+                } else {
+                    if (this.lastCreatingType)
+                        this.newCreatingCursor(this.lastCreatingType, this.lastCreatingCommand);
+                }
+            },
+            help: "Repeat last action",
+        },
+        4: { //L1 button bind RMB action
+        },
+        5: { //R1 button bind LMB action
+        },
+        6: { //Select button
+            callback: function() {
+                this.gamepadButtleMode = !this.gamepadButtleMode;
+            },
+        },
+        7: { //Start button
+            callback: this.toggleBag,
+            help: "Open bag",
+        },
+        8: { //Guide button
+            toggle: "help",
+        },
+        9: { //LeftStick press
+            // NOTE: not bind.
+        },
+        10: { //Right Stick press
+            // TODO: reset cursor position.
+        },
+    };
+
+    this.gamepadAxesMap = {
+        0: { //LeftStickX
+            minus: function() {
+                this.wasd(-1, 0);
+            },
+            plus: function() {
+                this.wasd(+1, 0);
+            },
+        },
+        1: { //LeftStickY
+            minus: function() {
+                this.wasd(0, -1);
+            },
+            plus: function() {
+                this.wasd(0, +1);
+            },
+        },
+        2: { //RightStickX
+            minus: function() {
+
+            },
+            plus: function() {
+
+            },
+        },
+        3: { //RightStickY
+            minus: function() {
+
+            },
+            plus: function() {
+
+            },
+        },
+        4: { //RightTrigger
+            minus: function() {
+
+            },
+            plus: function() {
+
+            },
+        },
+        5: { //LeftTrigger
+            minus: function() {
+
+            },
+            plus: function() {
+
+            },
+        },
+        6: { //FourWayKeyX
+            minus: function() {
+                this.wasd(-1, 0);
+            },
+            plus: function() {
+                this.wasd(+1, 0);
+            },
+        },
+        7: { //FourWayKeyY
+            minus: function() {
+                this.wasd(0, -1);
+            },
+            plus: function() {
+                this.wasd(0, +1);
+            },
+        },
+    };
+
     this.takeScreenshot = function(name) {
         if (!game.args["steam"]) {
             console.warn("Not supported");
@@ -595,6 +737,9 @@ function Controller(game) {
         window.addEventListener("keydown", this.on.keydown);
         window.addEventListener("keyup", this.on.keyup);
         window.addEventListener("wheel", this.on.wheel);
+
+        window.addEventListener("gamepadconnected", this.on.gamepadconnected);
+        window.addEventListener("gamepaddisconnected", this.on.gamepaddisconnected);
 
         window.addEventListener("contextmenu", disableEvent);
         window.addEventListener("dragstart", disableEvent);
@@ -983,6 +1128,15 @@ function Controller(game) {
             }
             return true;
         },
+        gamepadconnected: function(e) {
+            this.gamepad = navigator.getGamepads()[0];
+            this.updateGamepad();
+            return true;
+        },
+        gamepaddisconnected: function(e) {
+            this.gamepad = null;
+            return true;
+        },
     };
 
     for (var eventName in this.on) {
@@ -996,6 +1150,30 @@ function Controller(game) {
         cursor.rotate(delta);
     };
 
+    this.updateGamepad = function() {
+        // gamepad update loop
+        this.gamepad = navigator.getGamepads()[0];
+        for (var i = 0; i < this.gamepad.buttons.length; i++) {
+            if (this.gamepad.buttons[i].pressed) {
+                this.gamepadKeymap[i].callback();
+            }
+        }
+        for (var i = 0; i < this.gamepad.axes.length; i++) {
+            if (this.gamepad.axes[i] != 0) {
+                if(i != 4 && i != 5 && Math.abs(this.gamepad.axes[i]) >= 0.5) {
+                    if(this.gamepad.axes[i] < 0) {
+                        var minus = this.gamepadAxesMap[i].minus.bind(this);
+                        minus();
+                    } else {
+                        var plus = this.gamepadAxesMap[i].plus.bind(this);
+                        plus();
+                    }
+                }
+            }
+        }
+        var loop = this.updateGamepad.bind(this);
+        requestAnimationFrame(loop);
+    };
 
     this.updateHovered = function() {
         if (this.world.menuHovered || this.world.cursor)
